@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { pool, serverDir } from './config.js'
+import { serverDir } from './config.js'
+import { pool } from './db.js'
 
 const diretorioMigrations = join(serverDir, 'migrations')
 const CHAVE_LOCK = 923_741_001

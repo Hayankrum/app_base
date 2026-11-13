@@ -15,28 +15,99 @@ npm run dev
 ```
 
 A API usa `server/.env` para carregar `DATABASE_URL` e `PORT` (por padrão,
-`3001`). O Vite encaminha as rotas `/sync` para essa API durante o
-desenvolvimento. Configure também `JWT_SECRET` com uma chave aleatória de pelo
-menos 32 caracteres, por exemplo gerada com `openssl rand -base64 48`. Para
-iniciar somente a API, use `npm run dev:server`.
+`3001`). O Vite encaminha as rotas `/auth`, `/billing` e `/sync` para essa API
+durante o desenvolvimento. Configure também `JWT_SECRET` com uma chave aleatória
+de pelo menos 32 caracteres, por exemplo gerada com
+`openssl rand -base64 48`. Para iniciar somente a API, use `npm run
+dev:server`.
+
+## Deploy na Vercel
+
+O projeto já está configurado para a Vercel:
+
+- `vercel.json` publica o frontend Vite gerado em `dist/` no CDN e encaminha
+  `/auth`, `/billing`, `/sync` e `/health` para uma única Vercel Function.
+- `api/index.js` inicializa o Express no formato serverless.
+- O fallback de SPA devolve `index.html` para rotas do React.
+- O service worker (`sw.js`) e o manifest são servidos sem cache longo.
+
+### 1. Banco de dados
+
+A Vercel não hospeda um PostgreSQL persistente. Crie um banco externo (Neon,
+Supabase, Railway, Amazon RDS etc.) e copie a URL de conexão. Prefira a URL
+**pooled** do provedor, indicada para ambientes serverless.
+
+### 2. Importar o projeto
+
+Importe o repositório em [vercel.com/new](https://vercel.com/new). A Vercel
+detecta o Vite e usa:
+
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Install Command: `npm install` (instala também o workspace `server`)
+
+### 3. Variáveis de ambiente
+
+Configure no dashboard da Vercel, em **Settings → Environment Variables**:
+
+```sh
+DATABASE_URL=postgres://...        # URL pooled do banco
+JWT_SECRET=...                     # pelo menos 32 caracteres
+APP_URL=https://seu-dominio.com    # opcional; sem ela usamos o domínio da Vercel
+MIGRATE_ON_START=true              # padrão: aplica migrações no primeiro acesso
+```
+
+Se usar pagamentos, adicione também `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO_MONTHLY` e
+`STRIPE_PRICE_PRO_YEARLY`. Não defina `PORT` na Vercel e não configure
+`VITE_API_URL`: frontend e API compartilham o mesmo domínio.
+
+### 4. Migrações do banco
+
+Com `MIGRATE_ON_START=true` (padrão), a migração `001_baseline.sql` é aplicada
+automaticamente na primeira requisição. Para controlar isso manualmente, defina
+`MIGRATE_ON_START=false` e rode uma vez, apontando para o banco de produção:
+
+```sh
+DATABASE_URL='postgres://...' npm run db:migrate
+```
+
+Em projetos com Preview Deployments, use um banco separado para preview ou
+desative as migrações automáticas nos previews para não alterar o banco de
+produção.
+
+### 5. Stripe
+
+Cadastre o webhook apontando para `https://seu-dominio.com/billing/webhook` e
+escute os mesmos eventos descritos na seção de pagamentos abaixo. `APP_URL` deve
+ser o domínio público usado nos redirecionamentos do Checkout.
+
+### 6. Verificar o deploy
+
+Depois do deploy, acesse `https://seu-dominio.com/health`. A resposta deve ser
+`{"ok":true}`. Se retornar 503, confira `DATABASE_URL` e se o banco aceita
+conexões da Vercel.
 
 ## Produção: frontend e API no mesmo deploy
 
-O projeto usa npm workspaces, então `npm install` na raiz instala também as
-dependências da API. Para publicar, configure `DATABASE_URL`, `JWT_SECRET` (uma
-chave aleatória de pelo menos 32 caracteres) e, se necessário, `PORT` no
-ambiente de hospedagem. O comando de build e o comando de inicialização são:
+Esta seção vale para VPS, Railway, Render ou qualquer host que execute um
+processo Node contínuo. Para a Vercel, use a seção anterior. O projeto usa npm
+workspaces, então `npm install` na raiz instala também as dependências da API.
+Para publicar, configure `DATABASE_URL`, `JWT_SECRET` (uma chave aleatória de
+pelo menos 32 caracteres) e, se necessário, `PORT` no ambiente de hospedagem. O
+comando de build e o comando de inicialização são:
 
 ```sh
 npm run build
 npm start
 ```
 
-`npm run build` gera o frontend em `dist/`. `npm start` inicia o Express, que
-serve tanto os arquivos desse diretório quanto a API `/sync` no mesmo host e
-porta. Configure a hospedagem para executar `npm run build` no build e `npm
-start` ao iniciar a aplicação. Não configure `VITE_API_URL` quando frontend e
-API compartilham o mesmo domínio.
+`npm run build` gera o frontend em `dist/`. `npm start` aplica as migrações
+pendentes (quando `MIGRATE_ON_START=true`) e inicia o Express, que serve tanto os
+arquivos desse diretório quanto as APIs `/auth`, `/billing` e `/sync` no mesmo
+host e porta. Configure a hospedagem para executar `npm run build` no build e
+`npm start` ao iniciar a aplicação. Não configure `VITE_API_URL` quando frontend
+e API compartilham o mesmo domínio.
 
 O PostgreSQL continua sendo um serviço separado: informe a URL dele em
 `DATABASE_URL` e mantenha o banco persistente. Para preparar um banco novo,

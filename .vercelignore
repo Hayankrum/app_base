@@ -1,0 +1,8 @@
+# Segredos locais: use as Environment Variables do dashboard da Vercel.
+server/.env
+.env
+.env.local
+.env.*.local
+
+# Documentação e artefatos que não precisam ser enviados no upload.
+docs

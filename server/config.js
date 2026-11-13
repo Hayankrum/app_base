@@ -8,10 +8,19 @@ const serverDir = dirname(fileURLToPath(import.meta.url))
 
 dotenv.config({ path: resolve(serverDir, '.env') })
 
+// Na Vercel, APP_URL pode ser omitida: usamos o domínio público do projeto
+// para os redirecionamentos do Stripe. Ainda assim, defina APP_URL no dashboard
+// quando tiver um domínio próprio.
+const urlPublicaPadrao = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:5173'
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL é obrigatória'),
-  APP_URL: z.string().url('APP_URL deve ser uma URL válida').default('http://localhost:5173'),
+  APP_URL: z.string().url('APP_URL deve ser uma URL válida').default(urlPublicaPadrao),
   PORT: z.coerce.number().int().positive().default(3001),
   // Em produção, use "true" apenas se a aplicação estiver atrás de um proxy
   // confiável (Railway, Render, Fly, Nginx etc.).
